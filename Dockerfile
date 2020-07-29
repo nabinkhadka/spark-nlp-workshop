@@ -23,46 +23,49 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     unzip \
     pkg-config \
-    software-properties-common
+    software-properties-common \
+    graphviz
 
 RUN adduser --disabled-password \
     --gecos "Default user" \
     --uid ${NB_UID} \
     ${NB_USER}
 
-ENV JAVA_VER 8
-ENV JAVA_HOME /usr/lib/jvm/java-8-oracle
+# Install OpenJDK-8
+RUN apt-get update && \
+    apt-get install -y openjdk-8-jdk && \
+    apt-get install -y ant && \
+    apt-get clean;
 
-RUN echo 'deb http://ppa.launchpad.net/webupd8team/java/ubuntu trusty main' >> /etc/apt/sources.list && \
-    echo 'deb-src http://ppa.launchpad.net/webupd8team/java/ubuntu trusty main' >> /etc/apt/sources.list && \
-    apt-key adv --keyserver keyserver.ubuntu.com --recv-keys C2518248EEA14886 && \
-    apt-get update && \
-    echo oracle-java${JAVA_VER}-installer shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections && \
-    apt-get install -y --force-yes --no-install-recommends oracle-java${JAVA_VER}-installer oracle-java${JAVA_VER}-set-default && \
+# Fix certificate issues
+RUN apt-get update && \
+    apt-get install ca-certificates-java && \
     apt-get clean && \
-    rm -rf /var/cache/oracle-jdk${JAVA_VER}-installer
+    update-ca-certificates -f;
+# Setup JAVA_HOME -- useful for docker commandline
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-amd64/
+RUN export JAVA_HOME
 
-RUN update-java-alternatives -s java-8-oracle
-
-RUN echo "export JAVA_HOME=/usr/lib/jvm/java-8-oracle" >> ~/.bashrc
+RUN echo "export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64/" >> ~/.bashrc
 
 RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-
 RUN pip3 install --upgrade pip
-RUN pip3 install --no-cache-dir notebook==5.* numpy pyspark spark-nlp Keras scikit-spark scikit-learn scipy matplotlib pydot
+RUN pip3 install --no-cache-dir notebook==5.* numpy pyspark==2.4.4 spark-nlp==2.5.1 pandas mlflow Keras scikit-spark scikit-learn scipy matplotlib pydot tensorflow graphviz
 RUN wget https://s3.amazonaws.com/auxdata.johnsnowlabs.com/spark-nlp-resources/glove.6B.100d.zip && \
     mkdir -p /home/jovyan/data/embeddings/ && \
     unzip glove.6B.100d.zip -d /home/jovyan/data/embeddings && \
     rm glove.6B.100d.zip
 
 # Make sure the contents of our repo are in ${HOME}
-RUN mkdir -p /home/jovyan/strata
+RUN mkdir -p /home/jovyan/tutorials
 RUN mkdir -p /home/jovyan/jupyter
 
 COPY data ${HOME}/data
 COPY jupyter ${HOME}/jupyter
-COPY strata ${HOME}/strata
+COPY tutorials ${HOME}/tutorials
+RUN jupyter notebook --generate-config
+COPY jupyter_notebook_config.json /home/jovyan/.jupyter/jupyter_notebook_config.json
 USER root
 RUN chown -R ${NB_UID} ${HOME}
 USER ${NB_USER}
